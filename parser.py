@@ -1,12 +1,12 @@
-import numpy as np
-from sklearn.naive_bayes import MultinomialNB
-
+from collections import defaultdict
+from collections import Counter
 DELIM = "+++$+++"
 all_genres = set()
 all_words = set()
 
 def transform_word(word):
-    return word.lower().strip().strip("?").strip(".").strip("!")
+    return word
+    #return word.lower().strip().strip("?").strip(".").strip("!")
 
 def parse_data(movies_file_name, lines_file_name, conv_file_name):
     
@@ -40,15 +40,6 @@ def parse_data(movies_file_name, lines_file_name, conv_file_name):
 
 
     return conversations
-
-def bag_of_words(convo):
-    bag = { word: 0 for word in all_words }
-    for line in convo["lines"]:
-        for word in line.split(" "):
-            bag[transform_word(word)] += 1
-
-    return bag.values()
-
 def simplify_rating(rating):
     if rating < 3: return "bad"
     if rating < 7: return "ok"
@@ -66,27 +57,53 @@ hold_out_data=data[len(training_data):]
 labels = ["bad", "ok", "good"]
 
 
-print len(data)
-print len(training_data)
-print len(hold_out_data)
-
-print len(all_words)
-
-print max(bag_of_words(data[2]))
-
-training_bags = [bag_of_words(x) for x in training_data]
+print(len(data))
+print(len(training_data))
+print(len(hold_out_data))
+print(len(all_words))
 training_labels = [simplify_rating(x["movie"]["rating"]) for x in training_data]
-
-print "Training Classifier...."
-nb_classifier = MultinomialNB()
-nb_classifier.fit(training_bags, training_labels)
-
-print "Training Data Acc:"
-print nb_classifier.score(training_bags, training_labels)
-
-
-print "Hold Out Data Acc:"
-print nb_classifier.score([bag_of_words(x) for x in hold_out_data], [simplify_rating(x["movie"]["rating"]) for x in hold_out_data])
-
-
-
+hold_labels = [simplify_rating(x["movie"]["rating"]) for x in hold_out_data]
+bad = defaultdict(lambda :Counter())
+ok = defaultdict(lambda :Counter())
+good = defaultdict(lambda :Counter())
+def build(dic,x):
+    for line in x["lines"]:
+        line = [transform_word(word) for word in line.split()]
+        for first, second in zip(line, line[1:]):
+            dic[first].update([second])
+print("building")
+for x,rating in zip(training_data, training_labels):
+    if rating == 'bad':
+        build(bad,x)
+    if rating == 'ok':
+        build(ok,x)
+    if rating == 'good':
+        build(good,x)
+def norm(x):
+    if x>0:
+        return 1
+    return 0
+def score(dicts, x):
+    scores = []
+    for d in dicts:
+        sc = []
+        for line in x["lines"]:
+            line = [transform_word(word) for word in line.split()]
+            for first, second in zip(line, line[1:]):
+                total = sum(d[first].values())
+                sc.append(norm(d[first][second]))
+        scores.append(sum(sc))
+    #print(scores)
+    return max(enumerate(scores), key = lambda x:x[1])[0]
+def test(data, labels):  
+    right = 0
+    print("testing")
+    for x,rating in zip(data, labels):
+        #print(scores,rating)
+        if score((good, ok, bad), x) == {"good":0, "ok":1, "bad":2}[rating]:
+            right+=1
+    return (right/len(data))
+print("Training acc")
+#print(test(training_data[:1000], training_labels[:1000]))
+print("Testing acc")
+print(test(hold_out_data, hold_labels))
