@@ -1,5 +1,6 @@
 from collections import defaultdict
 from collections import Counter
+from random import randint
 DELIM = "+++$+++"
 all_genres = set()
 all_words = set()
@@ -9,7 +10,7 @@ def transform_word(word):
     #return word.lower().strip().strip("?").strip(".").strip("!")
 
 def parse_data(movies_file_name, lines_file_name, conv_file_name):
-    
+
     lines = {}
     movies = []
     conversations = []
@@ -44,7 +45,7 @@ def simplify_rating(rating):
     if rating < 3: return "bad"
     if rating < 7: return "ok"
     else: return "good"
-    
+
 
 
 prefix="data/cornell-movie-dialogs-corpus/"
@@ -84,26 +85,33 @@ def norm(x):
         return 1
     return 0
 def score(dicts, x):
-    scores = []
-    for d in dicts:
-        sc = []
-        for line in x["lines"]:
-            line = [transform_word(word) for word in line.split()]
-            for first, second in zip(line, line[1:]):
+    scores = [1,1,1]
+    for line in x["lines"]:
+        line = [transform_word(word) for word in line.split()]
+        for first, second in zip(line, line[1:]):
+            sc = []
+            for d in dicts:
                 total = sum(d[first].values())
-                sc.append(norm(d[first][second]))
-        scores.append(sum(sc))
-    #print(scores)
-    return max(enumerate(scores), key = lambda x:x[1])[0]
-def test(data, labels):  
+                if total!=0:
+                    sc.append(d[first][second]/total)
+                else:
+                    sc.append(0)
+            scores[sc.index(max(sc))]+=1
+    return scores
+def test(data, labels):
+    #diff = 0
     right = 0
-    print("testing")
     for x,rating in zip(data, labels):
-        #print(scores,rating)
-        if score((good, ok, bad), x) == {"good":0, "ok":1, "bad":2}[rating]:
+        scores = score((good, ok, bad), x)
+        total = sum(scores)
+        scores = [x/total for x in scores]
+        s = scores[0] * 10 + scores[1] * 5 + scores[2] * 1
+        if simplify_rating(s)==simplify_rating(x['movie']['rating']):
             right+=1
-    return (right/len(data))
-print("Training acc")
-#print(test(training_data[:1000], training_labels[:1000]))
+        #diff += round(abs(s-x['movie']['rating']),1)
+    return (right / len(data))
+
+#print("Training acc")
+#print(test(training_data, training_labels))
 print("Testing acc")
 print(test(hold_out_data, hold_labels))
