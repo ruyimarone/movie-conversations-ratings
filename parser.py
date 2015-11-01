@@ -6,8 +6,8 @@ all_genres = set()
 all_words = set()
 
 def transform_word(word):
-    return word
-    #return word.lower().strip().strip("?").strip(".").strip("!")
+    #return word
+    return word.lower().strip().strip("?").strip(".").strip("!")
 
 def parse_data(movies_file_name, lines_file_name, conv_file_name):
 
@@ -64,28 +64,21 @@ print(len(hold_out_data))
 print(len(all_words))
 training_labels = [simplify_rating(x["movie"]["rating"]) for x in training_data]
 hold_labels = [simplify_rating(x["movie"]["rating"]) for x in hold_out_data]
-bad = defaultdict(lambda :Counter())
-ok = defaultdict(lambda :Counter())
-good = defaultdict(lambda :Counter())
-def build(dic,x):
-    for line in x["lines"]:
-        line = [transform_word(word) for word in line.split()]
-        for first, second in zip(line, line[1:]):
-            dic[first].update([second])
-print("building")
-for x,rating in zip(training_data, training_labels):
-    if rating == 'bad':
-        build(bad,x)
-    if rating == 'ok':
-        build(ok,x)
-    if rating == 'good':
-        build(good,x)
-def norm(x):
-    if x>0:
-        return 1
-    return 0
+def build(models):
+    dicts = [defaultdict(lambda :Counter()) for x in range(models)]
+    def train(dic,x):
+        for line in x["lines"]:
+            line = [transform_word(word) for word in line.split()]
+            for first, second in zip(line, line[1:]):
+                dic[first].update([second])
+    size = 10 / models
+    for x,rating in zip(training_data, training_labels):
+        bucket = int(x['movie']['rating']//size)
+        #print(len(dicts),bucket)
+        train(dicts[bucket],x)
+    return dicts
 def score(dicts, x):
-    scores = [1,1,1]
+    scores = [1 for x in range(len(dicts))]
     for line in x["lines"]:
         line = [transform_word(word) for word in line.split()]
         for first, second in zip(line, line[1:]):
@@ -99,19 +92,20 @@ def score(dicts, x):
             scores[sc.index(max(sc))]+=1
     return scores
 def test(data, labels):
-    #diff = 0
     right = 0
+    dicts = build(10)
     for x,rating in zip(data, labels):
-        scores = score((good, ok, bad), x)
+        scores = score(dicts, x)
         total = sum(scores)
         scores = [x/total for x in scores]
-        s = scores[0] * 10 + scores[1] * 5 + scores[2] * 1
-        if simplify_rating(s)==simplify_rating(x['movie']['rating']):
+        s = sum([scores[n] * (n * 2) for n in range(len(dicts))])
+        if simplify_rating(s) == simplify_rating(x['movie']['rating']):
             right+=1
-        #diff += round(abs(s-x['movie']['rating']),1)
     return (right / len(data))
 
 #print("Training acc")
 #print(test(training_data, training_labels))
 print("Testing acc")
-print(test(hold_out_data, hold_labels))
+#s = build(2)
+#print(max([x['movie']['rating'] for x in data]))
+print(test(hold_out_data[:], hold_labels[:]))
